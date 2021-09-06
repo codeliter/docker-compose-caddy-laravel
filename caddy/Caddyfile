@@ -1,0 +1,15 @@
+localhost:80 {
+	# Set this path to your site's directory.
+	root * /srv/public
+
+	# Enable the static file server.
+	file_server
+
+	# GZIP
+	encode gzip
+
+    #log
+
+	# Or serve a PHP site through php-fpm:
+	php_fastcgi app:9000
+}

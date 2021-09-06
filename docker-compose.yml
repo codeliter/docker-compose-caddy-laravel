@@ -1,0 +1,112 @@
+version: '3.8'
+networks:
+  laravel: null
+services:
+  mysql:
+    container_name: mysql
+    networks:
+      - laravel
+    image: yobasystems/alpine-mariadb
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    expose:
+      - '3306'
+    ports:
+      - '3600:3306'
+    volumes:
+      - '/data/mysql:/var/lib/mysql'
+    restart: unless-stopped
+
+  redis:
+    container_name: redis
+    image: docker.io/bitnami/redis:6.2
+    environment:
+      - "ALLOW_EMPTY_PASSWORD=yes"
+      - "REDIS_PORT_NUMBER=6379"
+    ports:
+      - '6379:6379'
+    volumes:
+      - '/data/redis:/bitnami/redis/datum'
+    networks:
+      - laravel
+
+  npm:
+    image: node:13.7
+    container_name: npm
+    volumes:
+      - './src:/srv'
+    ports:
+      - "4000:3000"
+      - "4001:3001"
+    working_dir: /srv
+    entrypoint: [ 'npm' ]
+    networks:
+      - laravel
+
+  caddy:
+    container_name: caddy
+    networks:
+      - laravel
+    image: 'caddy:2-alpine'
+    restart: unless-stopped
+    ports:
+      - '8200:80'
+      - '9001:9001'
+    volumes:
+      - './caddy/Caddyfile:/etc/caddy/Caddyfile'
+      - './src:/srv'
+    depends_on:
+      - app
+
+  app:
+    container_name: app
+    networks:
+      - laravel
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - PHPUSER=${PHPUSER:-www-data}
+        - PHPGROUP=${PHPGROUP:-www-data}
+    environment:
+      DB_HOST: mysql
+    restart: unless-stopped
+    tty: true
+    expose:
+      - 9000
+      - 9001
+    volumes:
+      - './src:/srv'
+    depends_on:
+      - mysql
+      - redis
+      - mailhog
+
+  mailhog:
+    container_name: mailhog
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - laravel
+
+  composer:
+    build:
+      context: .
+      dockerfile: composer.dockerfile
+      args:
+        - PHPUSER=${PHPUSER:-www-data}
+        - PHPGROUP=${PHPGROUP:-www-data}
+    container_name: composer
+    volumes:
+      - ./src:/srv
+    depends_on:
+      - app
+    user: ${PHPUSER:-www-data}
+    entrypoint: [ 'composer', '--ignore-platform-reqs' ]
+    networks:
+      - laravel
